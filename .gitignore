@@ -1,5 +1,11 @@
+/*
+!/*/
 # Lockfree
 /lockfree/*
 !/lockfree/*.hpp
+# ThreadPool
+/threadpool/*
+!/threadpool/*.hpp
+!/threadpool/*.cpp
 # .gitignore
 !.gitignore
