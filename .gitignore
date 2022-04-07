@@ -1,0 +1,5 @@
+# Lockfree
+/lockfree/*
+!/lockfree/*.hpp
+# .gitignore
+!.gitignore
