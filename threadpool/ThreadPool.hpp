@@ -23,26 +23,27 @@ class ThreadPool : public RefBase {
 
  public:
   static sptr GetInstance() { 
+    cshrlog("ThreadPool::GetInstance\n");
     return _Ty::GetInstance();
   }
   virtual void postTask(ThreadPoolTask task, string name = "") = 0;
+  ~ThreadPool() override {}
 };
 
 class ThreadPoolImpl : public ThreadPool<ThreadPoolImpl> {
   using string = std::string;
   using sptr = cshr::sptr<ThreadPoolImpl>;
-
  public:
   static sptr GetInstance();
   virtual void postTask(ThreadPoolTask task, string name) override;
+  ~ThreadPoolImpl() override;
 
  private:
   ThreadPoolImpl();
-  ~ThreadPoolImpl();
   void WorkThreadMain(int id);
 
  private:
-  static sptr instance;
+  static sptr instance_;
   struct Worker {
     int id;
     std::thread thread_entry;

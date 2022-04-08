@@ -1,10 +1,9 @@
 #include "ThreadPool.hpp"
 
-#include <math.h>
-
 namespace cshr {
-sptr<ThreadPoolImpl> ThreadPoolImpl::instance;
+typename ThreadPoolImpl::sptr ThreadPoolImpl::instance_;
 ThreadPoolImpl::ThreadPoolImpl() {
+  cshrlog("ThreadPoolImp instance address: %p\n", this);
   cshrlog("ThreadPoolImp initiated.\n");
   sem_init(&taskSem, false, 0);
   int cpuNumber = (int)sysconf(_SC_NPROCESSORS_CONF);
@@ -20,6 +19,7 @@ ThreadPoolImpl::ThreadPoolImpl() {
 }
 
 ThreadPoolImpl::~ThreadPoolImpl() {
+  cshrlog("ThreadPoolImpl destroying.\n");
   running.store(false);
   for (int i = 0; i < workThreads.size(); ++i) {
     sem_post(&taskSem);
@@ -28,18 +28,27 @@ ThreadPoolImpl::~ThreadPoolImpl() {
     workThread->thread_entry.join();
   }
   sem_destroy(&taskSem);
-  cshrlog("ThreadPoolImpl destroy.\n");
+  cshrlog("ThreadPoolImpl destroyed.\n");
 }
-cshr::sptr<ThreadPoolImpl> ThreadPoolImpl::GetInstance() {
-  if (!instance) {
+typename ThreadPoolImpl::sptr ThreadPoolImpl::GetInstance() {
+  cshrlog("ThreadPoolImpl::GetInstance\n");
+  // static cshr::sptr<ThreadPoolImpl> instance = new ThreadPoolImpl();
+  // return instance;
+  /**
+   * @brief 下面的代码关于static的复制存在问题
+   * 
+   */
+  if (!instance_) {
     static std::mutex mutex;
-    std::lock_guard<std::mutex> lock(mutex);
-    if (!instance) {
-      instance = new ThreadPoolImpl();
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      if (!instance_) {
+        instance_ = new ThreadPoolImpl();
+      }
     }
   }
   cshrlog("ThreadPoolImpl gets singleton.\n");
-  return instance;
+  return instance_;
 }
 void ThreadPoolImpl::postTask(ThreadPoolTask task, string name) {
   {
