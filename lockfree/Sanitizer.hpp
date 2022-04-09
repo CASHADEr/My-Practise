@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include "../log/cshrlog.hpp"
 
 namespace cshr {
 template <typename _Deriv, typename _Node>
@@ -13,7 +14,10 @@ class _MemorySanitizer {
   inline _Deriv& selfCast() { return static_cast<_Deriv&>(*this); }
   inline bool access(node_ptr _node_ptr) { selfCast().access(_node_ptr); }
   inline bool release(node_ptr _node_ptr) { selfCast().release(_node_ptr); }
-  inline bool deaccess() { return access(nullptr); }
+  inline bool deaccess(node_ptr _node_ptr) {
+    return selfCast().deaccess(_node_ptr);
+  }
+  inline bool reset() { return selfCast().reset(); }
   _MemorySanitizer() {}
   virtual ~_MemorySanitizer() {}
 };
@@ -31,11 +35,37 @@ class HazardSanitizer
   class HazardPointer {
    public:
     inline id_type id() { return id_.load(); }
-    inline node_ptr accessing() { return accessing_ptr_.load(); }
+    inline void store(node_ptr addr) {
+      accessing_ptrs_[next_available_cache_pos].store(addr);
+      next_available_cache_pos = (next_available_cache_pos + 1) % sz;
+    }
+    inline void deaccess(node_ptr addr) {
+      for (int i = 0; i < sz; ++i) {
+        if (addr == accessing_ptrs_[i]) {
+          accessing_ptrs_[i].store(nullptr);
+        }
+      }
+    }
+    inline bool isAccessed(node_ptr addr) {
+      for (int i = 0; i < sz; ++i) {
+        if (addr == accessing_ptrs_[i]) {
+          return true;
+        }
+      }
+      return false;
+    };
+    inline void resetCache() {
+      for (int i = 0; i < sz; ++i) {
+        accessing_ptrs_[i].store(nullptr);
+      }
+      next_available_cache_pos = 0;
+    }
 
    public:
+    int next_available_cache_pos = 0;
+    constexpr static size_t sz = 2;
     atomic_id id_;
-    atomic_node_ptr accessing_ptr_;
+    atomic_node_ptr accessing_ptrs_[sz];
   };
   using access_array = HazardPointer[_ThreadMax];
 
@@ -43,30 +73,24 @@ class HazardSanitizer
   inline HazardPointer* _RegisterThread(const id_type& id) {
     id_type init_id;
     for (size_t i = 0; i < _ThreadMax; ++i) {
-      if (hps_[i].id_.compare_exchange_strong(init_id, id)) {
+      if (hps_[i].id() == id ||
+          hps_[i].id_.compare_exchange_strong(init_id, id))
         return &hps_[i];
-      }
-    }
-    return nullptr;
-  }
-  inline HazardPointer* _FindThreadAccess(const id_type& id) {
-    for (size_t i = 0; i < _ThreadMax; ++i) {
-      if (hps_[i].id() == id) {
-        return &hps_[i];
-      }
     }
     return nullptr;
   }
   inline void _ImmediateDelete(node_ptr _node_ptr) { delete _node_ptr; }
   inline void _DelayDelete(node_ptr _node_ptr) {
+    node_ptr ori_node_ptr;
     do {
-      _node_ptr->next_ = backward_deleting_list_.load();
-    } while (!backward_deleting_list_.compare_exchange_strong(_node_ptr->next_,
+      ori_node_ptr = backward_deleting_list_.load();
+      _node_ptr->modifyNext(ori_node_ptr);
+    } while (!backward_deleting_list_.compare_exchange_strong(ori_node_ptr,
                                                               _node_ptr));
   }
   inline void _Delete(node_ptr _node_ptr) {
     size_t i = 0;
-    while (i < _ThreadMax && hps_[i].accessing() != _node_ptr) {
+    while (i < _ThreadMax && !hps_[i].isAccessed(_node_ptr)) {
       ++i;
     }
     if (i == _ThreadMax) {
@@ -93,8 +117,6 @@ class HazardSanitizer
         : hp(context->_RegisterThread(std::this_thread::get_id())) {}
     ~HazardRegister() {
       if (!hp) return;
-      hp->id_.store(std::thread::id());
-      hp->accessing_ptr_.store(nullptr);
     }
     HazardPointer* hp;
   };
@@ -102,7 +124,19 @@ class HazardSanitizer
   inline bool _Store(node_ptr _node_ptr) {
     thread_local HazardRegister cur_register(this);
     if (!_node_ptr || !cur_register.hp) return false;
-    cur_register.hp->accessing_ptr_.store(_node_ptr);
+    cur_register.hp->store(_node_ptr);
+    return true;
+  }
+  inline bool _Deaccess(node_ptr _node_ptr) {
+    thread_local HazardRegister cur_register(this);
+    if (!_node_ptr || !cur_register.hp) return false;
+    cur_register.hp->deaccess(_node_ptr);
+    return true;
+  }
+  inline bool _Reset() {
+    thread_local HazardRegister cur_register(this);
+    if (!cur_register.hp) return false;
+    cur_register.hp->resetCache();
     return true;
   }
   inline bool _Release(node_ptr _node_ptr) noexcept {
@@ -134,6 +168,8 @@ class HazardSanitizer
   }
   bool access(node_ptr _node_ptr) { return _Store(_node_ptr); }
   bool release(node_ptr _node_ptr) { return _Release(_node_ptr); }
+  inline bool deaccess(node_ptr _node_ptr) { return _Deaccess(_node_ptr); }
+  inline bool reset() { return _Reset(); }
 
  private:
   access_array hps_ = {};
