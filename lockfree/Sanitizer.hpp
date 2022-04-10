@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+
 #include "../log/cshrlog.hpp"
 
 namespace cshr {
@@ -79,7 +80,16 @@ class HazardSanitizer
     }
     return nullptr;
   }
-  inline void _ImmediateDelete(node_ptr _node_ptr) { delete _node_ptr; }
+#ifdef __cshr_debug__
+ private:
+  std::atomic<int> _free_cnt{ATOMIC_VAR_INIT(0)};
+#endif
+  inline void _ImmediateDelete(node_ptr _node_ptr) {
+#ifdef __cshr_debug__
+    _free_cnt.fetch_add(1);
+#endif
+    delete _node_ptr;
+  }
   inline void _DelayDelete(node_ptr _node_ptr) {
     node_ptr ori_node_ptr;
     do {
@@ -103,7 +113,7 @@ class HazardSanitizer
     node_ptr to_delete = backward_deleting_list_.exchange(nullptr);
     while (to_delete) {
       node_ptr _node = to_delete;
-      to_delete = to_delete->next_;
+      to_delete = to_delete->next();
       _Delete(_node);
     }
   }
@@ -165,6 +175,9 @@ class HazardSanitizer
       to_delete = to_delete->next_;
       _ImmediateDelete(_node_ptr);
     }
+#ifdef __cshr_debug__
+    cshrlog("Sanitizer free %d node memories block\n", _free_cnt.load());
+#endif
   }
   bool access(node_ptr _node_ptr) { return _Store(_node_ptr); }
   bool release(node_ptr _node_ptr) { return _Release(_node_ptr); }

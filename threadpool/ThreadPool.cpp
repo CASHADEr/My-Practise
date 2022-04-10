@@ -8,7 +8,8 @@ ThreadPoolImpl::ThreadPoolImpl() {
   sem_init(&taskSem, false, 0);
   int cpuNumber = (int)sysconf(_SC_NPROCESSORS_CONF);
 #ifdef __cshr_debug__
-  cpuNumber = cpuNumber < 8 ? 8 : cpuNumber;
+  constexpr int debug_cpu_number = 16;
+  cpuNumber = cpuNumber < debug_cpu_number ? debug_cpu_number : cpuNumber;
 #endif
   cshrlog("cpu number: %d\n", cpuNumber);
   for (int i = 0; i < cpuNumber; ++i) {

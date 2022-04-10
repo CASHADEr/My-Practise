@@ -110,13 +110,29 @@ class LockFreeListStack {
     }
     sanitizer.reset();
     sanitizer.release(ori_node_ptr);
+#ifdef __cshr_debug__
+    __pop_count.fetch_add(1);
+#endif
     return ret;
   }
+#ifdef __cshr_debug__
+ private:
+  std::atomic<int> __pop_count{ATOMIC_VAR_INIT(0)};
+#endif
+ public:
   LockFreeListStack(bool openSanitizer = true)
       : head_(nullptr), size_(ATOMIC_VAR_INIT(0)), sanitizer{openSanitizer} {
     assert(head_.node_ptr_.is_lock_free());
   }
-  ~LockFreeListStack() {}
+  ~LockFreeListStack() {
+#ifdef __cshr_debug__
+    cshrlog("Stack(%p) pop %d times.\n", this, __pop_count.load());
+#endif
+    cshrlog("Clean Stack(%p)...\n", this);
+    while (Pop())
+      ;
+    cshrlog("Stack(%p) is clean...\n", this);
+  }
 
  private:
   stack_node_type head_;
@@ -198,6 +214,15 @@ class LockFreeListQueue {
         sanitizer{openSanitizer} {
     assert(head_.node_ptr_.is_lock_free());
   }
+  ~LockFreeListQueue() {
+#ifdef __cshr_debug__
+    cshrlog("Queue(%p) pop %d times.\n", this, __pop_count.load());
+#endif
+    cshrlog("Clean Queue(%p)...\n", this);
+    while (Pop())
+      ;
+    cshrlog("Queue(%p) is clean...\n", this);
+  }
 
  public:
   inline size_t size() { return size_.load(); }
@@ -250,11 +275,18 @@ class LockFreeListQueue {
         size_.fetch_sub(1);
         sanitizer.reset();
         sanitizer.release(head_node_ptr);
+#ifdef __cshr_debug__
+        __pop_count.fetch_add(1);
+#endif
         break;
       }
     }
     return ret;
   }
+#ifdef __cshr_debug__
+ private:
+  std::atomic<int> __pop_count{ATOMIC_VAR_INIT(0)};
+#endif
 
  private:
   std::atomic<size_t> size_;

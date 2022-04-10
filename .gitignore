@@ -7,5 +7,11 @@
 /threadpool/*
 !/threadpool/*.hpp
 !/threadpool/*.cpp
+# Test Files
+/test/*
+!/test/*/
+/test/*/*
+!/test/*/*.cpp
+!/test/*/makefile
 # .gitignore
 !.gitignore
