@@ -221,6 +221,7 @@ class LockFreeListQueue {
     cshrlog("Clean Queue(%p)...\n", this);
     while (Pop())
       ;
+    delete head_.node_ptr_.load();
     cshrlog("Queue(%p) is clean...\n", this);
   }
 
