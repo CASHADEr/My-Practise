@@ -1,5 +1,7 @@
 #include "EventLoop.hpp"
+
 #include <fcntl.h>
+#include <sys/sendfile.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -93,7 +95,8 @@ static void handle_http_404(int client_socket, struct io_uring *ring) {
 /**
  * 仅测试
  **/
-static void handle_http_100(const char *message, int client_socket, struct io_uring *ring) {
+static void handle_http_100(const char *message, int client_socket,
+                            struct io_uring *ring) {
   constexpr const char *response_100 =
       "HTTP/1.0 100 Request Success\r\n"
       "Content-type: text/html\r\n"
@@ -118,20 +121,27 @@ static void handle_http_100(const char *message, int client_socket, struct io_ur
  **/
 void handle_get_method(char *path, int client_socket, struct io_uring *ring) {
   char final_path[1024];
-  if (path[strlen(path) - 1] == '/') {
-    strcpy(final_path, "public");
-    strcat(final_path, path);
-    strcat(final_path, "index.html");
-  } else {
-    strcpy(final_path, "public");
-    strcat(final_path, path);
+  strcpy(final_path, "./src");
+  int len = strlen(path);
+  if(!len) handle_http_404(client_socket, ring);
+  if(path[0] != '/') {
+    strcat(final_path, "/");
   }
+  strcat(final_path, path);
+  printf("client wants file: %s\n", path);
+  printf("full path: %s\n", final_path);
   struct stat path_stat;
   if (stat(final_path, &path_stat) == -1) {
     handle_http_404(client_socket, ring);
   } else {
-    printf("client wants file {%s}\n", final_path);
-    handle_http_100(final_path, client_socket, ring);
+    int fd = open(final_path, O_RDONLY);
+    if(fd < 0) {
+      handle_http_100(final_path, client_socket, ring);
+    }else {
+      off_t off = 0;
+      size_t count = path_stat.st_size;
+      sendfile(client_socket, fd, &off, count);
+    }
   }
 }
 
@@ -146,7 +156,6 @@ static void handle_http_method(char *method_buffer, int client_socket,
   method = strtok_r(method_buffer, " ", &saveptr);
   strtolower(method);
   path = strtok_r(NULL, " ", &saveptr);
-
   if (strcmp(method, "get") == 0) {
     handle_get_method(path, client_socket, ring);
   } else {
@@ -177,7 +186,6 @@ void EventLoop::loop(int server_socket) {
   while (!quit) {
     int ret = io_uring_wait_cqe(&ring, &cqe);
     struct request *req = (struct request *)cqe->user_data;
-    printf("%d\n", ret);
     if (ret < 0) {
       perror("io_uring_wait_cqe");
       exit(1);
@@ -197,7 +205,8 @@ void EventLoop::loop(int server_socket) {
         break;
       case EVENT_TYPE_READ:
         if (!cqe->res) {
-          fprintf(stderr, "Empty request!\n");
+          fprintf(stderr, "Empty request, close Connection!\n");
+          shutdown(req->client_socket, SHUT_WR);
           break;
         }
         handle_client_request(req, &ring);
@@ -214,4 +223,3 @@ void EventLoop::loop(int server_socket) {
     io_uring_cqe_seen(&ring, cqe);
   }
 }
-
