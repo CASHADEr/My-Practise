@@ -1,11 +1,8 @@
 #include "EventLoop.hpp"
-
 #include <fcntl.h>
 #include <sys/sendfile.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "Parser.hpp"
 #include "io_uring_handle.hpp"
 
 /**

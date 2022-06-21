@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.10)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+project(AsyncServer VERSION 1.0)
+file(GLOB_RECURSE SRC_FILES *.cpp)
+add_library(asyncserver STATIC ${SRC_FILES})
+target_include_directories(asyncserver PUBLIC ../include)
+target_link_directories(asyncserver PUBLIC $(CMAKE_CURRENT_SOURCE_DIR)/lib)
+target_link_libraries(asyncserver PUBLIC uring)
