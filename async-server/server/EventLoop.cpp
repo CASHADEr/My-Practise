@@ -158,9 +158,10 @@ void handle_get_method(char *path, int client_socket, struct io_uring *ring) {
       "HTTP/1.0 200 Request OK\r\n"
       "Content-Length: %d\r\n"
       "Content-type: raw\r\n"
+      "Content-Disposition: attachment;filename=\"%s\"\r\n"
       "\r\n";
       char buffer[1024];
-      sprintf(buffer, response_ok, count);
+      sprintf(buffer, response_ok, count, path);
       if(write(client_socket, buffer, strlen(buffer)) < 0) {
         fprintf(stderr, "sync write http head fail.\n");
         close(client_socket);
