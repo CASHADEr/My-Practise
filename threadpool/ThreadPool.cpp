@@ -29,16 +29,15 @@ ThreadPoolImpl::~ThreadPoolImpl() {
     workThread->thread_entry.join();
   }
   sem_destroy(&taskSem);
+  cshrlog("ThreadPool Clean left jobs.\n");
+  while(!tasks.empty()) {
+    tasks.front().task();
+    tasks.pop();
+  }
   cshrlog("ThreadPoolImpl destroyed.\n");
 }
 typename ThreadPoolImpl::sptr ThreadPoolImpl::GetInstance() {
   cshrlog("ThreadPoolImpl::GetInstance\n");
-  // static cshr::sptr<ThreadPoolImpl> instance = new ThreadPoolImpl();
-  // return instance;
-  /**
-   * @brief 下面的代码关于static的复制存在问题
-   * 
-   */
   if (!instance_) {
     static std::mutex mutex;
     {
@@ -51,10 +50,10 @@ typename ThreadPoolImpl::sptr ThreadPoolImpl::GetInstance() {
   cshrlog("ThreadPoolImpl gets singleton.\n");
   return instance_;
 }
-void ThreadPoolImpl::postTask(ThreadPoolTask task, string name) {
+void ThreadPoolImpl::postTask(ThreadPoolTask &&task, string name) {
   {
     std::lock_guard<std::mutex> lock(tasksMutex);
-    tasks.push({.task = task, .name = name});
+    tasks.emplace(std::move(task), name);
   }
   sem_post(&taskSem);
 }
@@ -69,7 +68,7 @@ void ThreadPoolImpl::WorkThreadMain(int id) {
     Task task;
     {
       std::lock_guard<std::mutex> lock(tasksMutex);
-      task = tasks.front();
+      task = std::move(tasks.front());
       tasks.pop();
     }
     cshrlog("Work(%d) %s starts\n", id, task.name.data());

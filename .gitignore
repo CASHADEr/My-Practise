@@ -15,5 +15,5 @@
 !/test/*/makefile
 # .gitignore
 !.gitignore
-# IDE
-.vscode
+# IDE vscode format should be keep and should not supposed to be changed frequently
+!.vscode

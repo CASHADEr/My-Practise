@@ -29,10 +29,10 @@ void func_consume(_Ty* Q) {
 }
 LockFreeListStack<int> ST;
 LockFreeListQueue<int> Q;
-auto consumer_st = [&]() { func_consume(&ST); };
-auto consumer_q = [&]() { func_consume(&Q); };
-auto producer_st = [&]() { func_produce(&ST); };
-auto producer_q = [&]() { func_produce(&Q); };
+auto consumer_st = []() { func_consume(&ST); };
+auto consumer_q = []() { func_consume(&Q); };
+auto producer_st = []() { func_produce(&ST); };
+auto producer_q = []() { func_produce(&Q); };
 int main() {
   auto p = ThreadPool<>::GetInstance();
 
