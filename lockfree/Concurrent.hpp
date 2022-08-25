@@ -229,18 +229,26 @@ class LockFreeListQueue {
   inline size_t size() { return size_.load(); }
   void Push(const _Ty& value) {
     node_ptr new_node_ptr = new node_type(value, nullptr);
+    node_ptr pre_ori_node_ptr = tail_.node_ptr_.load();
     while (true) {
+      sanitizer.access(pre_ori_node_ptr); // The ori node must be firstly accessed, so the memory won't be seg fault when access its next pointer
       node_ptr ori_node_ptr = tail_.node_ptr_.load();
-      node_ptr next = ori_node_ptr->next_.load();
-
-      // The tail_ is not the newest
-      if (next) {
+      if(ori_node_ptr != pre_ori_node_ptr) // This means the tail has been shifted
+      {
+         pre_ori_node_ptr = ori_node_ptr;
+         continue;
+      }
+      // If the code runs here, it means the ori_node_ptr has been registered in sanitizer
+      // and now the pointer is still possible to be the tail
+      node_ptr next = ori_node_ptr->next_.load(); // next access won't be memory error, because the memory of ori_node_ptr has been reserved
+      if (next) // The tail_ is not the newest
+      {
         tail_.node_ptr_.compare_exchange_strong(ori_node_ptr, next);
         continue;
       }
-
       // append new Node to tail_
       if (ori_node_ptr->next_.compare_exchange_strong(next, new_node_ptr)) {
+        // If code runs here, it means the new_node_ptr has been successfully appended
         tail_.node_ptr_.compare_exchange_strong(ori_node_ptr, new_node_ptr);
         size_.fetch_add(1);
         break;

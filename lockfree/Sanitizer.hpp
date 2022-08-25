@@ -13,8 +13,8 @@ class _MemorySanitizer {
 
  public:
   inline _Deriv& selfCast() { return static_cast<_Deriv&>(*this); }
-  inline bool access(node_ptr _node_ptr) { selfCast().access(_node_ptr); }
-  inline bool release(node_ptr _node_ptr) { selfCast().release(_node_ptr); }
+  inline bool access(node_ptr _node_ptr) { return selfCast().access(_node_ptr); }
+  inline bool release(node_ptr _node_ptr) { return selfCast().release(_node_ptr); }
   inline bool deaccess(node_ptr _node_ptr) {
     return selfCast().deaccess(_node_ptr);
   }
